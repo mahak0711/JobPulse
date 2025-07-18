@@ -1,56 +1,131 @@
 'use client';
-import { useEffect, useState } from 'react';
+
+import { useState } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
+import toast, { Toaster } from 'react-hot-toast';
+
+const fetcher = url => fetch(url).then(res => res.json());
 
 export default function ClientDashboard({ session }) {
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { mutate } = useSWRConfig();
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [sortBy, setSortBy] = useState('dateApplied');
   const [order, setOrder] = useState('desc');
 
-useEffect(() => {
-  async function fetchApplications() {
-    setLoading(true);
+  const [showForm, setShowForm] = useState(false);
+  const [newJob, setNewJob] = useState({
+    position: '',
+    company: '',
+    status: 'Applied',
+    dateApplied: new Date().toISOString().split('T')[0],
+  });
+
+  // Construct query string
+  const queryParams = new URLSearchParams({
+    ...(search && { company: search }),
+    ...(status && { status }),
+    sortBy,
+    order,
+  }).toString();
+
+  const {
+    data: applications = [],
+    error,
+    isLoading,
+  } = useSWR(`/api/applications?${queryParams}`, fetcher);
+
+  const handleAddJob = async (e) => {
+    e.preventDefault();
     try {
-      const params = new URLSearchParams();
-      if (search) params.append('company', search); // ✅ updated line
-      if (status) params.append('status', status);
-      params.append('sortBy', sortBy);
-      params.append('order', order);
+      const res = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newJob),
+      });
 
-      const res = await fetch(`/api/applications?${params.toString()}`);
-      const data = await res.json();
-
-      if (Array.isArray(data)) {
-        setApplications(data);
-      } else {
-        console.error("Unexpected response:", data);
-        setApplications([]);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err?.error || 'Failed to add job');
       }
-    } catch (error) {
-      console.error("Failed to fetch applications:", error);
-      setApplications([]);
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  fetchApplications();
-}, [search, status, sortBy, order]);
+      toast.success('Job added!');
+      setNewJob({
+        position: '',
+        company: '',
+        status: 'Applied',
+        dateApplied: new Date().toISOString().split('T')[0],
+      });
+      setShowForm(false);
+
+      mutate(`/api/applications?${queryParams}`); // 🔁 Re-fetch data
+    } catch (error) {
+      toast.error('Error adding job');
+      console.error('Error adding job:', error.message);
+    }
+  };
 
   return (
     <>
+      <Toaster />
       <div className="p-8">
         <h1 className="text-2xl font-semibold mb-4">Dashboard</h1>
-        <p>Welcome, {session.user?.name}!</p>
+        <p>Welcome, {session?.user?.name || 'Guest'}!</p>
       </div>
 
       <div className="p-6 sm:p-12">
-        <h1 className="text-2xl font-bold mb-6">Job Applications</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Job Applications</h1>
+          <button
+            onClick={() => setShowForm((prev) => !prev)}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          >
+            {showForm ? 'Cancel' : '➕ Add Job'}
+          </button>
+        </div>
 
-        {/* 🔍 Filters & Controls */}
+        {showForm && (
+          <form onSubmit={handleAddJob} className="grid gap-4 mb-10 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <input
+              type="text"
+              placeholder="Job Position"
+              value={newJob.position}
+              onChange={(e) => setNewJob({ ...newJob, position: e.target.value })}
+              className="p-2 border border-gray-300 rounded-md"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Company Name"
+              value={newJob.company}
+              onChange={(e) => setNewJob({ ...newJob, company: e.target.value })}
+              className="p-2 border border-gray-300 rounded-md"
+              required
+            />
+            <select
+              value={newJob.status}
+              onChange={(e) => setNewJob({ ...newJob, status: e.target.value })}
+              className="p-2 border border-gray-300 rounded-md"
+            >
+              <option value="Applied">Applied</option>
+              <option value="Interview">Interview</option>
+              <option value="Offer">Offer</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+            <input
+              type="date"
+              value={newJob.dateApplied}
+              onChange={(e) => setNewJob({ ...newJob, dateApplied: e.target.value })}
+              className="p-2 border border-gray-300 rounded-md"
+            />
+            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+              Submit Job
+            </button>
+          </form>
+        )}
+
+        {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6">
           <input
             type="text"
@@ -89,8 +164,10 @@ useEffect(() => {
           </select>
         </div>
 
-        {loading ? (
+        {isLoading ? (
           <p>Loading...</p>
+        ) : error ? (
+          <p className="text-red-500">Failed to load applications.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">

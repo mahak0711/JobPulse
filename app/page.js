@@ -5,32 +5,36 @@ import Link from 'next/link';
 import AuthButton from './components/AuthButton';
 import { useSession } from 'next-auth/react';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
+import { useRouter } from 'next/navigation'; // ✅ Correct for App Router
 
 export default function Home() {
   const { data: session } = useSession();
+const router = useRouter();
 
   const [search, setSearch] = useState('');
+  const [showMore, setShowMore] = useState(false);
   const [newJob, setNewJob] = useState({
     position: '',
     company: '',
-    status: '',
-    dateApplied: new Date().toISOString().split('T')[0], // Default to today
+    status: 'Applied',
+    dateApplied: new Date().toISOString().split('T')[0],
+    notes: '',
+    salary: '',
+    location: '',
   });
 
   const handleSearch = (e) => {
     e.preventDefault();
     console.log('Search for:', search);
-    // Optional: implement search functionality
   };
 
   const handleAddJob = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/jobs', {
+      const response = await fetch('/api/applications', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newJob),
       });
 
@@ -39,17 +43,21 @@ export default function Home() {
         throw new Error(err?.error || 'Failed to add job');
       }
 
-      const result = await response.json();
-      console.log('Job added:', result);
+      toast.success('Job added successfully!');
+    router.push('/dashboard'); 
 
       setNewJob({
         position: '',
         company: '',
-        status: '',
+        status: 'Applied',
         dateApplied: new Date().toISOString().split('T')[0],
+        notes: '',
+        salary: '',
+        location: '',
       });
     } catch (error) {
       console.error('Error adding job:', error.message);
+      toast.error('Failed to add job');
     }
   };
 
@@ -98,31 +106,71 @@ export default function Home() {
               <form onSubmit={handleAddJob} className="grid gap-4">
                 <input
                   type="text"
-                  placeholder="Job Position (e.g. Frontend Developer)"
+                  placeholder="Job Position"
                   value={newJob.position}
                   onChange={(e) => setNewJob({ ...newJob, position: e.target.value })}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white bg-white dark:bg-gray-700 placeholder-gray-500"
+                  required
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
                 />
                 <input
                   type="text"
-                  placeholder="Company Name"
+                  placeholder="Company"
                   value={newJob.company}
                   onChange={(e) => setNewJob({ ...newJob, company: e.target.value })}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white bg-white dark:bg-gray-700 placeholder-gray-500"
+                  required
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
                 />
-                <input
-                  type="text"
-                  placeholder="Status (e.g. Applied, Interviewing, Offer)"
+                <select
                   value={newJob.status}
                   onChange={(e) => setNewJob({ ...newJob, status: e.target.value })}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white bg-white dark:bg-gray-700 placeholder-gray-500"
-                />
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+                >
+                  <option value="Applied">Applied</option>
+                  <option value="Interviewing">Interviewing</option>
+                  <option value="Offered">Offered</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
                 <input
                   type="date"
                   value={newJob.dateApplied}
                   onChange={(e) => setNewJob({ ...newJob, dateApplied: e.target.value })}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white bg-white dark:bg-gray-700"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
                 />
+
+                {/* Expandable Section */}
+                {showMore && (
+                  <>
+                    <textarea
+                      placeholder="Notes"
+                      value={newJob.notes}
+                      onChange={(e) => setNewJob({ ...newJob, notes: e.target.value })}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Salary (optional)"
+                      value={newJob.salary}
+                      onChange={(e) => setNewJob({ ...newJob, salary: e.target.value })}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Location"
+                      value={newJob.location}
+                      onChange={(e) => setNewJob({ ...newJob, location: e.target.value })}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+                    />
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowMore(!showMore)}
+                  className="text-sm text-blue-600 hover:underline self-start"
+                >
+                  {showMore ? 'Hide optional fields' : 'Add more details'}
+                </button>
+
                 <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
                   Add Job
                 </button>
